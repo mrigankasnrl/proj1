@@ -1,0 +1,407 @@
+FORM FRM_KONDI_WERT_980.
+*{   INSERT         D01K920478                                        1
+*TABLES: ZSDT_DISTZ.
+
+*komp-zzmgame   = komp-mgame.
+
+
+
+  DATA : YKOMV  LIKE XKOMV OCCURS 0 WITH HEADER LINE .
+  DATA : YKBETR LIKE XKOMV-KBETR ,
+         ZKBETR LIKE XKOMV-KBETR ,
+         XKBETR LIKE XKOMV-KBETR ,
+         YYKBETR LIKE XKOMV-KBETR ,
+         zmgame like komp-mgame,
+         W_DISTZ  LIKE ZSDT_DISTZ-DISTZ,
+         W_HILL LIKE ZSDT_DISTZ-HILLY,
+         W_PLAIN LIKE ZSDT_DISTZ-PLAIN.
+DATA: VBELN LIKE VBFA-VBELN,
+      OIGVEHICLE LIKE KOMP-OIGVEHICLE.
+
+  YKOMV[] = XKOMV[] .
+
+  READ TABLE YKOMV WITH KEY KSCHL = 'ZFTR' .
+  IF SY-SUBRC = 0 .
+     YKBETR = YKOMV-KBETR.
+  ENDIF .
+
+DATA: wrk_knumh LIKE a726-knumh ,
+        wrk_kschl LIKE xkomv-kschl ,
+        xmfrgr LIKE komp-mfrgr ,
+        xmgame LIKE komp-mgame ,
+        xntgew LIKE komp-mgame ,
+        ymgame LIKE komp-mgame ,
+        zzmgame LIKE KOMP-MGAME  ,
+        xkpein LIKE konp-kpein ,
+        xkmein LIKE konp-kmein .
+
+DATA: XKWERT1 LIKE XKWERT.
+DATA: LN_OIGSI TYPE OIGSI.
+DATA: ZTR_QTY TYPE OIGSVMQ-TRQTY.
+DATA: ZOIGSVMQ TYPE OIGSVMQ.
+DATA: BEGIN OF ZOIGSI OCCURS 0.
+      INCLUDE STRUCTURE OIGSI.
+DATA: KUNNR TYPE LIKP-KUNNR,
+      DISTZ TYPE ZSDT_DISTZ-DISTZ,
+      END OF ZOIGSI.
+DATA: ZKNA1 TYPE KNA1.
+
+CLEAR W_HILL. CLEAR W_PLAIN. CLEAR XKWERT1.
+SELECT SINGLE HILLY PLAIN FROM ZSDT_DISTZ INTO ( W_HILL, W_PLAIN )
+  WHERE KUNWE = KOMK-KUNWE AND ( WERKS = '3100'  AND  VSTEL = '3100').
+IF W_HILL IS NOT INITIAL AND KOMK-VSBED <> 'CL' AND KOMK-KDGRP <> 'ON' AND KOMK-KDGRP <> 'OI' AND KOMK-KDGRP <> 'TG'
+  AND YKBETR IS NOT INITIAL.
+ CLEAR wrk_knumh.
+ SELECT SINGLE knumh INTO wrk_knumh FROM  a726 CLIENT SPECIFIED
+         WHERE  mandt      = sy-mandt
+         AND    kappl      = 'F'
+         AND    kschl      = 'ZN09'
+         AND    tplst      = komk-WERKS
+         AND    mfrgr      = 'MSHS'
+         AND    KUNWE      = komk-KUNWE
+         AND    datbi      >= komk-prsdt.
+  IF NOT wrk_knumh IS INITIAL.
+        SELECT SINGLE kbetr kpein kmein INTO
+            (xkomv-kbetr,konp-kpein, konp-kmein) FROM  konp CLIENT SPECIFIED
+              WHERE  mandt    = sy-mandt
+              AND    knumh    = wrk_knumh
+              AND    loevm_ko = ' '.
+       IF sy-subrc = 0.
+          xkmein = konp-kmein.
+          xkpein = konp-kpein.
+       endif.
+     zzmgame = komp-mgame.
+     XKBETR  = XKOMV-KBETR.
+     XKOMV-KBETR = YKBETR.
+   XKWERT = ( XKBETR * ZZMGAME * W_HILL ) / 1000000.
+   XKWERT = XKWERT / konp-kpein.
+   XKWERT1 = XKWERT.
+  ENDIF.
+
+CLEAR wrk_knumh.
+SELECT SINGLE knumh INTO wrk_knumh FROM  a726 CLIENT SPECIFIED
+         WHERE  mandt      = sy-mandt
+         AND    kappl      = 'F'
+         AND    kschl      = 'ZN01'
+         AND    tplst      = komk-WERKS
+         AND    mfrgr      = 'MSHS'
+         AND    KUNWE      = komk-KUNWE
+         AND    datbi      >= komk-prsdt.
+  IF NOT wrk_knumh IS INITIAL.
+        SELECT SINGLE kbetr kpein kmein INTO
+            (xkomv-kbetr,konp-kpein, konp-kmein) FROM  konp CLIENT SPECIFIED
+              WHERE  mandt    = sy-mandt
+              AND    knumh    = wrk_knumh
+              AND    loevm_ko = ' '.
+       IF sy-subrc = 0.
+          xkmein = konp-kmein.
+          xkpein = konp-kpein.
+       endif.
+     zzmgame = komp-mgame.
+     XKBETR  = XKOMV-KBETR.
+     XKOMV-KBETR = YKBETR.
+
+   XKWERT = ( XKBETR * ZZMGAME * W_PLAIN ) / 1000000.
+   XKWERT = XKWERT / konp-kpein.
+   XKWERT = XKWERT + XKWERT1.
+  ENDIF.
+ENDIF.
+
+IF W_HILL IS NOT INITIAL AND KOMK-VSBED <> 'CL' AND ( KOMK-KDGRP = 'ON' OR KOMK-KDGRP = 'OI' OR KOMK-KDGRP = 'TG' )
+  AND YKBETR IS NOT INITIAL.
+ data: znumc type i,
+       zchar(10).
+
+  clear: wrk_knumh, znumc, zchar.
+  move komp-mgame to znumc.
+  znumc = znumc.
+  move znumc to zchar.
+  condense zchar.
+  SELECT SINGLE knumh INTO wrk_knumh FROM  a927 CLIENT SPECIFIED
+         WHERE  mandt      = sy-mandt
+         AND    kappl      = 'F'
+         AND    kschl      = 'ZN09'
+         AND    tplst      = komk-WERKS
+         AND    MFRGR      = 'MSHS'
+         AND    zmgame     = zchar
+         AND    datbi      >= komk-prsdt.
+
+  IF NOT wrk_knumh IS INITIAL.
+    SELECT SINGLE kbetr kpein kmein INTO
+            (xkomv-kbetr,konp-kpein, konp-kmein) FROM  konp CLIENT SPECIFIED
+              WHERE  mandt    = sy-mandt
+              AND    knumh    = wrk_knumh
+              AND    loevm_ko = ' '.
+    IF sy-subrc = 0.
+      xkmein = konp-kmein.
+      xkpein = konp-kpein.
+      zzmgame = komp-mgame.
+      XKBETR  = XKOMV-KBETR.
+      XKOMV-KBETR = YKBETR.
+      XKWERT = ( XKBETR * ZZMGAME * W_HILL ) / 1000000.
+      XKWERT = XKWERT / konp-kpein.
+      XKWERT1 = XKWERT.
+    endif.
+  ENDIF.
+
+
+  clear: wrk_knumh, znumc, zchar.
+  move komp-mgame to znumc.
+  znumc = znumc .
+  move znumc to zchar.
+  condense zchar.
+  SELECT SINGLE knumh INTO wrk_knumh FROM  a927 CLIENT SPECIFIED
+         WHERE  mandt      = sy-mandt
+         AND    kappl      = 'F'
+         AND    kschl      = 'ZN01'
+         AND    tplst      = komk-WERKS
+         AND    MFRGR      = 'MSHS'
+         AND    zmgame     = zchar
+         AND    datbi      >= komk-prsdt.
+
+
+  IF NOT wrk_knumh IS INITIAL.
+        SELECT SINGLE kbetr kpein kmein INTO
+            (xkomv-kbetr,konp-kpein, konp-kmein) FROM  konp CLIENT SPECIFIED
+              WHERE  mandt    = sy-mandt
+              AND    knumh    = wrk_knumh
+              AND    loevm_ko = ' '.
+       IF sy-subrc = 0.
+         xkmein = konp-kmein.
+         xkpein = konp-kpein.
+         zzmgame = komp-mgame.
+         XKBETR  = XKOMV-KBETR.
+         XKOMV-KBETR = YKBETR.
+         XKWERT = ( XKBETR * ZZMGAME * W_PLAIN ) / 1000000.
+         XKWERT = XKWERT / konp-kpein.
+         XKWERT = XKWERT + XKWERT1.
+       endif.
+  ENDIF.
+
+  clear: wrk_knumh.
+  SELECT SINGLE knumh INTO wrk_knumh FROM  a928 CLIENT SPECIFIED
+        WHERE  mandt      = sy-mandt
+        AND    kappl      = 'F'
+        AND    kschl      = 'ZN11'
+        AND    tplst      = komk-WERKS
+        AND    mfrgr      = 'MSHS'
+        AND    KUNWE      = komk-KUNWE
+        AND    zmgame     = zchar
+        AND    datbi      >= komk-prsdt.
+  if wrk_knumh is initial.
+    SELECT SINGLE knumh INTO wrk_knumh FROM  a726 CLIENT SPECIFIED
+          WHERE  mandt      = sy-mandt
+          AND    kappl      = 'F'
+          AND    kschl      = 'ZN11'
+          AND    tplst      = komk-WERKS
+          AND    mfrgr      = 'MSHS'
+          AND    KUNWE      = komk-KUNWE
+          AND    datbi      >= komk-prsdt.
+  endif.
+  IF NOT wrk_knumh IS INITIAL.
+        SELECT SINGLE kbetr kpein kmein INTO
+            (xkomv-kbetr,konp-kpein, konp-kmein) FROM  konp CLIENT SPECIFIED
+              WHERE  mandt    = sy-mandt
+              AND    knumh    = wrk_knumh
+              AND    loevm_ko = ' '.
+    IF sy-subrc = 0.
+       xkmein = konp-kmein.
+       xkpein = konp-kpein.
+       XKBETR  = XKOMV-KBETR.
+       XKOMV-KBETR = YKBETR.
+       XKWERT = XKWERT + XKBETR.
+    ENDIF.
+  ENDIF.
+ENDIF.
+
+CLEAR: LN_OIGSI, ZOIGSI, ZTR_QTY, ZOIGSVMQ.
+REFRESH ZOIGSI.
+IF KOMK-KDGRP = 'TG' AND KOMK-VSBED <> 'CL'.
+  CLEAR ZKNA1.
+    SELECT SINGLE * FROM KNA1 INTO ZKNA1 WHERE KUNNR = ZOIGSI-KUNNR.
+  IF KOMP-VGBEL <> ' '.
+    SELECT COUNT(*) FROM LIKP WHERE VBELN = KOMP-VGBEL.
+      IF SY-SUBRC = 0.
+          SELECT SINGLE * FROM OIGSI INTO LN_OIGSI WHERE DOC_NUMBER = KOMP-VGBEL.
+          SELECT * FROM OIGSVMQ INTO ZOIGSVMQ WHERE SHNUMBER = LN_OIGSI-SHNUMBER AND TD_ACTION = '4'.
+            IF zkna1-ZMAXQTY = 0 OR zkna1-ZMAXQTY IS INITIAL.
+              ZTR_QTY = ZTR_QTY + ZOIGSVMQ-TRQTY.
+              ELSE.
+                ZTR_QTY = KOMP-MGAME.
+            ENDIF.
+          ENDSELECT.
+          SELECT * FROM OIGSI INTO ZOIGSI WHERE SHNUMBER = LN_OIGSI-SHNUMBER.
+          SELECT SINGLE KUNNR FROM LIKP INTO ZOIGSI-KUNNR WHERE VBELN = ZOIGSI-DOC_NUMBER.
+          SELECT SINGLE DISTZ FROM ZSDT_DISTZ INTO ZOIGSI-DISTZ WHERE KUNWE = ZOIGSI-KUNNR
+            AND ( WERKS = '3100'  AND  VSTEL = '3100').
+            APPEND ZOIGSI.
+          ENDSELECT.
+      ENDIF.
+  ENDIF.
+ENDIF.
+
+IF W_HILL IS INITIAL AND KOMK-VSBED <> 'CL' AND YKBETR IS NOT INITIAL.
+  IF KOMK-KDGRP = 'TG' OR KOMK-KDGRP = 'OI' OR KOMK-KDGRP = 'ON'.
+    clear: wrk_knumh, znumc, zchar.
+    move komp-mgame to znumc.
+    znumc = znumc.
+    move znumc to zchar.
+    condense zchar.
+    SELECT SINGLE knumh INTO wrk_knumh FROM  a927 CLIENT SPECIFIED
+           WHERE  mandt      = sy-mandt
+           AND    kappl      = 'F'
+           AND    kschl      = 'ZN01'
+           AND    tplst      = komk-WERKS
+           AND    MFRGR      = 'MSHS'
+           AND    zmgame     = zchar
+           AND    datbi      >= komk-prsdt.
+  ENDIF.
+
+
+*  IF KOMP-MGAME > '12.000' AND KOMK-KDGRP <> 'TG' AND KOMK-VSBED <> 'CL'.
+*  CLEAR VBELN.
+*  SELECT SINGLE VBELN FROM VBFA INTO VBELN WHERE VBELV = KOMP-VGBEL AND
+*    VBTYP_N = 'r'.
+*  SELECT SINGLE VEHICLE FROM OIGSV INTO OIGVEHICLE WHERE SHNUMBER = VBELN.
+*
+*    IF wrk_knumh IS INITIAL.
+*      SELECT SINGLE knumh INTO wrk_knumh FROM  a726 CLIENT SPECIFIED
+*             WHERE  mandt      = sy-mandt
+*             AND    kappl      = 'F'
+*             AND    kschl      = 'ZN01'
+*             AND    tplst      = komk-WERKS
+*             AND    mfrgr      = 'MSHS'
+*             AND    KUNWE      = komk-KUNWE
+*             AND    datbi      >= komk-prsdt.
+*
+*    IF wrk_knumh IS INITIAL.
+*      SELECT SINGLE knumh INTO wrk_knumh FROM  a926 CLIENT SPECIFIED
+*             WHERE  mandt      = sy-mandt
+*             AND    kappl      = 'F'
+*             AND    kschl      = 'ZN01'
+*             AND    tplst      = komk-WERKS
+*             AND    mfrgr      = 'MSHS'
+*             AND    datbi      >= komk-prsdt.
+*    ENDIF.
+*    ENDIF.
+*  ENDIF.
+*
+*
+*  IF ZTR_QTY > '12.000' AND KOMK-KDGRP = 'TG' AND KOMK-VSBED <> 'CL'.
+*  SELECT SINGLE knumh INTO wrk_knumh FROM  a726 CLIENT SPECIFIED
+*           WHERE  mandt      = sy-mandt
+*           AND    kappl      = 'F'
+*           AND    kschl      = 'ZN01'
+*           AND    tplst      = komk-WERKS
+*           AND    mfrgr      = 'MSHS'
+*           AND    KUNWE      = komk-KUNWE
+*           AND    datbi      >= komk-prsdt.
+*
+*   IF wrk_knumh IS INITIAL.
+*    SELECT SINGLE knumh INTO wrk_knumh FROM  a926 CLIENT SPECIFIED
+*           WHERE  mandt      = sy-mandt
+*           AND    kappl      = 'F'
+*           AND    kschl      = 'ZN01'
+*           AND    tplst      = komk-WERKS
+*           AND    mfrgr      = 'MSHS'
+*           AND    datbi      >= komk-prsdt.
+*   ENDIF.
+*  ENDIF.
+*
+*  IF NOT wrk_knumh IS INITIAL.
+*    SELECT SINGLE kbetr kpein kmein INTO
+*       (xkomv-kbetr,konp-kpein, konp-kmein) FROM  konp CLIENT SPECIFIED
+*             WHERE  mandt    = sy-mandt
+*             AND    knumh    = wrk_knumh
+*             AND    loevm_ko = ' '.
+*    IF sy-subrc = 0.
+*      xkmein = konp-kmein.
+*      xkpein = konp-kpein.
+*   ENDIF.
+*  ENDIF.
+*
+*  IF KOMP-MGAME = '12.000' AND KOMK-KDGRP <> 'TG' AND KOMK-VSBED <> 'CL'.
+*  SELECT SINGLE knumh INTO wrk_knumh FROM  a926 CLIENT SPECIFIED
+*           WHERE  mandt      = sy-mandt
+*           AND    kappl      = 'F'
+*           AND    kschl      = 'ZN01'
+*           AND    tplst      = komk-WERKS
+*           AND    mfrgr      = 'MSHS'
+**           AND    KFRST      = XKFRST
+*           AND    datbi      >= komk-prsdt.
+*  ENDIF.
+*
+*  IF ZTR_QTY <= '12.000' AND KOMK-KDGRP = 'TG' AND KOMK-VSBED <> 'CL'.
+*    SELECT SINGLE knumh INTO wrk_knumh FROM  a726 CLIENT SPECIFIED
+*             WHERE  mandt      = sy-mandt
+*             AND    kappl      = 'F'
+*             AND    kschl      = 'ZN01'
+*             AND    tplst      = komk-WERKS
+*             AND    mfrgr      = 'MSHS'
+*              AND   KUNWE      = komk-KUNWE
+*             AND    datbi      >= komk-prsdt.
+*
+*     IF wrk_knumh IS INITIAL.
+*      SELECT SINGLE knumh INTO wrk_knumh FROM  a926 CLIENT SPECIFIED
+*             WHERE  mandt      = sy-mandt
+*             AND    kappl      = 'F'
+*             AND    kschl      = 'ZN01'
+*             AND    tplst      = komk-WERKS
+*             AND    mfrgr      = 'MSHS'
+*             AND    datbi      >= komk-prsdt.
+*     ENDIF.
+*  ENDIF.
+ENDIF.
+
+
+IF NOT wrk_knumh IS INITIAL.
+  SELECT SINGLE kbetr kpein kmein INTO
+     (xkomv-kbetr,konp-kpein, konp-kmein) FROM  konp CLIENT SPECIFIED
+           WHERE  mandt    = sy-mandt
+           AND    knumh    = wrk_knumh
+           AND    loevm_ko = ' '.
+  IF sy-subrc = 0.
+    xkmein = konp-kmein.
+    xkpein = konp-kpein.
+  endif.
+
+  zzmgame = komp-mgame.
+  XKBETR  = XKOMV-KBETR.
+  XKOMV-KBETR = YKBETR.
+
+  IF KOMK-KDGRP = 'TG'.
+    SORT ZOIGSI BY DISTZ DESCENDING.
+    READ TABLE ZOIGSI INDEX 1.
+    W_DISTZ = ZOIGSI-DISTZ.
+  ENDIF.
+
+  LOOP AT ZOIGSI.
+    CLEAR ZKNA1.
+    SELECT SINGLE * FROM KNA1 INTO ZKNA1 WHERE KUNNR = ZOIGSI-KUNNR.
+      if zkna1-ZMAXQTY > 0.
+        clear W_DISTZ.
+      endif.
+  ENDLOOP.
+
+  IF W_DISTZ IS INITIAL.
+    SELECT SINGLE DISTZ FROM ZSDT_DISTZ INTO W_DISTZ WHERE KUNWE = KOMK-KUNWE AND ( WERKS = '3100'  AND  VSTEL = '3100').
+  ENDIF.
+
+  IF KOMK-KDGRP = 'OI' OR KOMK-KDGRP = 'TG' OR KOMK-KDGRP = 'ON'.
+    PERFORM FRM_KONDI_WERT_980(Z_BISD_ROUTINES) TABLES XKOMV
+                                                USING  XKBETR
+                                                       W_DISTZ
+                                                       xkpein
+                                                       xkwert
+                                                       zzmgame
+                                                       W_HILL
+                                                       CHANGING XKWERT  .
+    ELSE.
+      CLEAR XKWERT.
+  ENDIF.
+  ELSE.
+    CLEAR XKWERT.
+ENDIF.
+
+*}   INSERT
+ENDFORM.
